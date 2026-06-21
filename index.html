@@ -11,6 +11,7 @@
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; transition: 0.3s; }
         .container { max-width: 1200px; margin: auto; background: var(--table-bg); padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .panel { display: flex; gap: 10px; background: var(--panel); padding: 15px; border-radius: 8px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+        .mass-input { margin-bottom: 20px; padding: 15px; background: #e2e8f0; border-radius: 8px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th { background: var(--primary); color: white; padding: 10px; }
         td { border: 1px solid #cbd5e1; padding: 5px; text-align: center; }
@@ -34,8 +35,12 @@
         <button class="btn-danger" onclick="eliminarCurso()">❌ Eliminar Curso</button>
     </div>
     
-    <button onclick="agregarFila()" style="background:#10b981">+ Agregar Estudiante</button>
-    <button class="btn-danger" onclick="eliminarSeleccionados()">🗑️ Eliminar Seleccionados</button>
+    <div class="mass-input">
+        <textarea id="listaNombres" placeholder="Pega lista de nombres aquí (uno por línea)..." style="width:100%; height:60px; margin-bottom:10px;"></textarea>
+        <button onclick="cargarLista()" style="background:#059669">Cargar Lista Masiva</button>
+        <button onclick="agregarFila()" style="background:#10b981">+ Agregar Estudiante</button>
+        <button class="btn-danger" onclick="eliminarSeleccionados()">🗑️ Eliminar Seleccionados</button>
+    </div>
 
     <table>
         <thead><tr><th><input type="checkbox" onclick="toggleSelectAll(this)"></th><th>Nombre</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Total</th><th>%</th></tr></thead>
@@ -61,13 +66,13 @@
     function renderizar() {
         const sel = document.getElementById('selectorSecciones');
         const keys = Object.keys(cursos);
-        if (keys.length > 0 && !cursos[miSeccion]) miSeccion = keys[0];
-        
+        if (keys.length > 0 && (!miSeccion || !cursos[miSeccion])) miSeccion = keys[0];
         sel.innerHTML = keys.map(n => `<option value="${n}" ${n === miSeccion ? 'selected':''}>${n}</option>`).join('');
-        if(!miSeccion || !cursos[miSeccion]) { document.getElementById('tbody').innerHTML = ""; return; }
+        
+        const tbody = document.getElementById('tbody');
+        if(!miSeccion || !cursos[miSeccion]) { tbody.innerHTML = ""; return; }
         
         document.getElementById('inputDias').value = cursos[miSeccion].dias || 179;
-        const tbody = document.getElementById('tbody');
         tbody.innerHTML = (cursos[miSeccion].estudiantes || []).map((e, i) => {
             let total = meses.reduce((s, m) => s + (parseInt(e[m]) || 0), 0);
             let pct = Math.round((total / (cursos[miSeccion].dias || 179)) * 100);
@@ -86,31 +91,46 @@
         e.preventDefault();
         const row = parseInt(e.target.dataset.row);
         const col = parseInt(e.target.dataset.col);
-        let next;
-        if (e.key === 'ArrowUp') next = document.querySelector(`[data-row="${row-1}"][data-col="${col}"]`);
-        if (e.key === 'ArrowDown') next = document.querySelector(`[data-row="${row+1}"][data-col="${col}"]`);
-        if (e.key === 'ArrowLeft') next = document.querySelector(`[data-row="${row}"][data-col="${col-1}"]`);
-        if (e.key === 'ArrowRight') next = document.querySelector(`[data-row="${row}"][data-col="${col+1}"]`);
+        let next = document.querySelector(`[data-row="${e.key === 'ArrowUp' ? row-1 : e.key === 'ArrowDown' ? row+1 : row}"][data-col="${e.key === 'ArrowLeft' ? col-1 : e.key === 'ArrowRight' ? col+1 : col}"]`);
         if (next) { next.focus(); next.select(); }
     }
 
     function actualizar(id, campo, val) {
         let e = cursos[miSeccion].estudiantes.find(x => x.id == id);
         e[campo] = val === '' ? 0 : parseInt(val);
+        calcularFila(id);
         db.collection("escuela").doc("datos_cursos").set({ cursos: cursos });
     }
 
-    function actualizarDias(val) { cursos[miSeccion].dias = parseInt(val) || 179; db.collection("escuela").doc("datos_cursos").set({ cursos: cursos }); }
+    function calcularFila(id) {
+        const e = cursos[miSeccion].estudiantes.find(x => x.id == id);
+        let total = meses.reduce((s, m) => s + (parseInt(e[m]) || 0), 0);
+        let pct = Math.round((total / (cursos[miSeccion].dias || 179)) * 100);
+        const row = document.querySelector(`input[value="${e.nombre}"]`).parentElement.parentElement;
+        row.cells[13].innerText = total;
+        row.cells[14].innerText = pct + "%";
+        row.cells[14].className = `porcentaje ${pct >= 80 ? 'green' : 'red'}`;
+    }
+
+    function cargarLista() {
+        const area = document.getElementById('listaNombres');
+        area.value.split('\n').forEach(n => { if(n.trim()) cursos[miSeccion].estudiantes.push({ id: Date.now()+Math.random(), nombre: n.trim(), ...Object.fromEntries(meses.map(m=>[m,''])) }); });
+        area.value = '';
+        db.collection("escuela").doc("datos_cursos").set({ cursos: cursos });
+    }
+
     function crearCurso() { 
         let n = document.getElementById('nuevoCurso').value.trim(); 
         if(n && !cursos[n]) { 
             cursos[n] = { dias: 179, estudiantes: [] }; 
             miSeccion = n;
             localStorage.setItem('mi_seccion_local', miSeccion);
-            db.collection("escuela").doc("datos_cursos").set({ cursos: cursos });
             document.getElementById('nuevoCurso').value = '';
+            db.collection("escuela").doc("datos_cursos").set({ cursos: cursos });
         } 
     }
+    
+    function actualizarDias(val) { cursos[miSeccion].dias = parseInt(val) || 179; db.collection("escuela").doc("datos_cursos").set({ cursos: cursos }); }
     function eliminarCurso() { if(miSeccion && confirm("¿Eliminar curso " + miSeccion + "?")) { delete cursos[miSeccion]; miSeccion = Object.keys(cursos)[0] || ""; localStorage.setItem('mi_seccion_local', miSeccion); db.collection("escuela").doc("datos_cursos").set({ cursos: cursos }); } }
     function agregarFila() { if(miSeccion) { cursos[miSeccion].estudiantes.push({ id: Date.now()+Math.random(), nombre: "Nuevo", ...Object.fromEntries(meses.map(m=>[m,''])) }); db.collection("escuela").doc("datos_cursos").set({ cursos: cursos }); } }
     function eliminarSeleccionados() { const sel = Array.from(document.querySelectorAll('.select-row:checked')).map(cb => cb.value); cursos[miSeccion].estudiantes = cursos[miSeccion].estudiantes.filter(e => !sel.includes(String(e.id))); db.collection("escuela").doc("datos_cursos").set({ cursos: cursos }); }
