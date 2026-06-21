@@ -6,109 +6,134 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; }
-        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .panel { display: flex; gap: 10px; background: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; align-items: center; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-        th { background: #0056b3; color: white; }
-        input { width: 100%; border: none; background: transparent; text-align: center; }
-        button { padding: 8px 12px; cursor: pointer; border-radius: 4px; border: none; background: #0056b3; color: white; font-weight: bold; }
-        .btn-danger { background: #dc3545; }
-        .btn-success { background: #28a745; }
+        :root { --bg: #f8fafc; --text: #334155; --panel: #f1f5f9; --table-bg: white; --primary: #2563eb; }
+        .dark-mode { --bg: #0f172a; --text: #f1f5f9; --panel: #1e293b; --table-bg: #334155; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; transition: 0.3s; }
+        .container { max-width: 1200px; margin: auto; background: var(--table-bg); padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .panel { display: flex; gap: 10px; background: var(--panel); padding: 15px; border-radius: 8px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { background: var(--primary); color: white; padding: 10px; }
+        td { border: 1px solid #cbd5e1; padding: 5px; text-align: center; }
+        input { width: 100%; background: transparent; color: var(--text); border: none; text-align: center; }
+        .porcentaje { font-weight: bold; }
+        .red { color: #ef4444; }
+        .green { color: #10b981; }
+        button { padding: 8px 15px; cursor: pointer; border-radius: 4px; border: none; background: var(--primary); color: white; font-weight: bold; }
+        .btn-danger { background: #ef4444; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="panel">
-        <strong>Sección:</strong>
+        <button onclick="document.body.classList.toggle('dark-mode')">🌓 Modo</button>
         <select id="selectorSecciones" onchange="cambiarSeccionLocal()"></select>
-        <input type="text" id="nuevoCurso" placeholder="Nombre nuevo curso" style="width: 150px; background: white; border: 1px solid #ccc; padding: 5px;">
+        <input type="text" id="nuevoCurso" placeholder="Nombre curso" style="width:120px; padding:5px;">
         <button onclick="crearCurso()">+ Crear Curso</button>
+        <button class="btn-danger" onclick="eliminarCurso()">❌ Eliminar Curso</button>
+        <button class="btn-danger" onclick="eliminarSeleccionados()">🗑️ Eliminar Estudiantes</button>
     </div>
     
-    <textarea id="listaNombres" placeholder="Pega lista de nombres aquí (uno por línea)..." style="width:100%; height:60px;"></textarea>
-    <button class="btn-success" onclick="cargarLista()" style="margin-bottom: 10px;">Cargar Lista Masiva</button>
+    <textarea id="listaNombres" placeholder="Pega lista de nombres..." style="width:100%; height:50px; margin-bottom:10px;"></textarea>
+    <button onclick="cargarLista()">Cargar Lista Masiva</button>
+    <button onclick="agregarFila()" style="background:#10b981">+ Agregar Estudiante</button>
 
-    <table id="tabla">
-        <thead><tr><th>Nombre</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Total</th><th>%</th><th>X</th></tr></thead>
+    <table>
+        <thead><tr><th><input type="checkbox" onclick="toggleSelectAll(this)"></th><th>Nombre</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Total</th><th>%</th></tr></thead>
         <tbody id="tbody"></tbody>
     </table>
-    <button onclick="agregarFila()">+ Agregar Estudiante Individual</button>
 </div>
 
 <script>
-    const firebaseConfig = {
-        apiKey: "AIzaSyBrxKdXSdj1x8euLrU2tK5x8qNFIN4B1Go",
-        authDomain: "asistencia-3d5e1.firebaseapp.com",
-        projectId: "asistencia-3d5e1",
-        storageBucket: "asistencia-3d5e1.firebasestorage.app",
-        messagingSenderId: "1085603282006",
-        appId: "1:1085603282006:web:eadae7c550880169198ff7",
-        measurementId: "G-LKQ22LDGXW"
-    };
+    const firebaseConfig = { apiKey: "AIzaSyBrxKdXSdj1x8euLrU2tK5x8qNFIN4B1Go", authDomain: "asistencia-3d5e1.firebaseapp.com", projectId: "asistencia-3d5e1", storageBucket: "asistencia-3d5e1.firebasestorage.app", messagingSenderId: "1085603282006", appId: "1:1085603282006:web:eadae7c550880169198ff7", measurementId: "G-LKQ22LDGXW" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
-
     const meses = ['ago', 'sep', 'oct', 'nov', 'dic', 'ene', 'feb', 'mar', 'abr', 'may', 'jun'];
-    let cursos = {};
+    let cursos = {}; 
     let miSeccion = localStorage.getItem('mi_seccion_local') || "";
 
-    db.collection("escuela").doc("datos_cursos").onSnapshot((doc) => {
-        if (doc.exists) {
-            cursos = doc.data().cursos || {};
-        } else {
-            // Si la base está vacía, creamos la estructura inicial
-            cursos = { "Ejemplo": { dias: 179, estudiantes: [] } };
-            db.collection("escuela").doc("datos_cursos").set({ cursos: cursos });
-        }
-        if(!miSeccion || !cursos[miSeccion]) miSeccion = Object.keys(cursos)[0];
+    db.collection("escuela").doc("datos_cursos").onSnapshot(doc => {
+        cursos = doc.exists ? doc.data().cursos : {};
+        if(!miSeccion || !cursos[miSeccion]) miSeccion = Object.keys(cursos)[0] || "";
         renderizar();
     });
+
+    function guardarDatos() {
+        db.collection("escuela").doc("datos_cursos").set({ cursos: cursos });
+    }
 
     function renderizar() {
         const sel = document.getElementById('selectorSecciones');
         sel.innerHTML = Object.keys(cursos).map(n => `<option value="${n}" ${n === miSeccion ? 'selected':''}>${n}</option>`).join('');
-        
-        if(!cursos[miSeccion]) return;
+        if(!miSeccion || !cursos[miSeccion]) { tbody.innerHTML = ""; return; }
+
         const tbody = document.getElementById('tbody');
-        tbody.innerHTML = cursos[miSeccion].estudiantes.map(e => `
-            <tr>
+        tbody.innerHTML = (cursos[miSeccion].estudiantes || []).map((e, i) => {
+            let total = meses.reduce((s, m) => s + (parseInt(e[m]) || 0), 0);
+            let pct = Math.round((total / 179) * 100);
+            return `<tr>
+                <td><input type="checkbox" class="select-row" value="${e.id}"></td>
                 <td><input type="text" value="${e.nombre}" onchange="actualizar('${e.id}', 'nombre', this.value)"></td>
-                ${meses.map(m => `<td><input type="number" value="${e[m] || 0}" onchange="actualizar('${e.id}', '${m}', this.value)"></td>`).join('')}
-                <td>${meses.reduce((s, m) => s + (parseInt(e[m]) || 0), 0)}</td>
-                <td>${Math.round((meses.reduce((s, m) => s + (parseInt(e[m]) || 0), 0) / (cursos[miSeccion].dias || 179)) * 100)}%</td>
-                <td><button class="btn-danger" onclick="eliminar('${e.id}')">X</button></td>
-            </tr>
-        `).join('');
+                ${meses.map(m => `<td><input type="number" class="mes-input" data-row="${i}" data-col="${meses.indexOf(m)}" value="${e[m] || 0}" onchange="actualizar('${e.id}', '${m}', this.value)" onkeydown="navegar(event)"></td>`).join('')}
+                <td>${total}</td>
+                <td class="porcentaje ${pct >= 80 ? 'green' : 'red'}">${pct}%</td>
+            </tr>`;
+        }).join('');
     }
 
-    function cambiarSeccionLocal() { miSeccion = document.getElementById('selectorSecciones').value; localStorage.setItem('mi_seccion_local', miSeccion); renderizar(); }
+    function navegar(e) {
+        if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+        e.preventDefault(); 
+        const row = parseInt(e.target.dataset.row);
+        const col = parseInt(e.target.dataset.col);
+        let next = null;
+        if (e.key === 'ArrowUp') next = document.querySelector(`[data-row="${row-1}"][data-col="${col}"]`);
+        if (e.key === 'ArrowDown') next = document.querySelector(`[data-row="${row+1}"][data-col="${col}"]`);
+        if (e.key === 'ArrowLeft' && col > 0) next = document.querySelector(`[data-row="${row}"][data-col="${col-1}"]`);
+        if (e.key === 'ArrowRight' && col < 11) next = document.querySelector(`[data-row="${row}"][data-col="${col+1}"]`);
+        if (next) next.focus();
+    }
 
     function crearCurso() {
-        let nombre = document.getElementById('nuevoCurso').value.trim();
-        if(nombre && !cursos[nombre]) {
-            cursos[nombre] = { dias: 179, estudiantes: [] };
-            db.collection("escuela").doc("datos_cursos").set({ cursos: cursos }); // Usamos set para asegurar creación
-            document.getElementById('nuevoCurso').value = '';
+        let n = document.getElementById('nuevoCurso').value.trim();
+        if(n && !cursos[n]) { cursos[n] = { estudiantes: [] }; guardarDatos(); document.getElementById('nuevoCurso').value = ''; }
+    }
+
+    function eliminarCurso() {
+        if(confirm("¿Seguro que quieres eliminar el curso " + miSeccion + "?")) {
+            delete cursos[miSeccion];
+            miSeccion = Object.keys(cursos)[0] || "";
+            localStorage.setItem('mi_seccion_local', miSeccion);
+            guardarDatos();
         }
     }
 
-    function cargarLista() {
-        let nombres = document.getElementById('listaNombres').value.split('\n');
-        nombres.forEach(n => { if(n.trim()) cursos[miSeccion].estudiantes.push({ id: Date.now()+Math.random(), nombre: n.trim(), ...Object.fromEntries(meses.map(m=>[m,0])) }); });
-        db.collection("escuela").doc("datos_cursos").set({ cursos: cursos });
+    function agregarFila() {
+        if(!miSeccion) return;
+        cursos[miSeccion].estudiantes.push({ id: Date.now()+Math.random(), nombre: "Nuevo", ...Object.fromEntries(meses.map(m=>[m,0])) });
+        guardarDatos();
     }
 
-    function actualizar(id, campo, valor) {
+    function actualizar(id, campo, val) {
         let e = cursos[miSeccion].estudiantes.find(x => x.id == id);
-        e[campo] = campo == 'nombre' ? valor : parseInt(valor) || 0;
-        db.collection("escuela").doc("datos_cursos").set({ cursos: cursos });
+        e[campo] = campo == 'nombre' ? val : parseInt(val) || 0;
+        guardarDatos();
     }
 
-    function agregarFila() { cursos[miSeccion].estudiantes.push({ id: Date.now()+Math.random(), nombre: "Nuevo", ...Object.fromEntries(meses.map(m=>[m,0])) }); db.collection("escuela").doc("datos_cursos").set({ cursos: cursos }); }
+    function cargarLista() {
+        const area = document.getElementById('listaNombres');
+        area.value.split('\n').forEach(n => { if(n.trim()) cursos[miSeccion].estudiantes.push({ id: Date.now()+Math.random(), nombre: n.trim(), ...Object.fromEntries(meses.map(m=>[m,0])) }); });
+        area.value = '';
+        guardarDatos();
+    }
 
-    function eliminar(id) { cursos[miSeccion].estudiantes = cursos[miSeccion].estudiantes.filter(e => e.id != id); db.collection("escuela").doc("datos_cursos").set({ cursos: cursos }); }
+    function eliminarSeleccionados() {
+        const sel = Array.from(document.querySelectorAll('.select-row:checked')).map(cb => cb.value);
+        cursos[miSeccion].estudiantes = cursos[miSeccion].estudiantes.filter(e => !sel.includes(String(e.id)));
+        guardarDatos();
+    }
+    
+    function cambiarSeccionLocal() { miSeccion = document.getElementById('selectorSecciones').value; localStorage.setItem('mi_seccion_local', miSeccion); renderizar(); }
+    function toggleSelectAll(s) { document.querySelectorAll('.select-row').forEach(cb => cb.checked = s.checked); }
 </script>
 </body>
 </html>
